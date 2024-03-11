@@ -1,0 +1,7 @@
+*.o
+*.dis
+*.elf
+*.hex
+*.map
+*__pycache__
+*.vscode
