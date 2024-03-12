@@ -9,7 +9,7 @@ does position control
 
 void PositionController_Startup();
 
-void set_desired_ref_angle(int deg);
+void set_desired_ref_angle(float deg);
 
 /// PID Getter, Setter
 void set_position_kp(float kp);
@@ -19,3 +19,4 @@ float get_position_kp();
 float get_position_ki();
 float get_position_kd();
 float get_posn_PID_output_ref_current();
+float get_PID_OUTPUT_CONTROL_U(int idx);

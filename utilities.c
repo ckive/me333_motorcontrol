@@ -17,11 +17,11 @@ has completed).
 #define ITEST_NUM_SAMPS 100
 #define TRAJ_NUM_SAMPS 3000
 
-volatile int ITEST_RefCurrent[ITEST_NUM_SAMPS];      // reference +/- 200mA current cycle
-volatile int ITEST_MeasuredCurrent[ITEST_NUM_SAMPS]; // actual current
-volatile int TRAJ_RefPosn[TRAJ_NUM_SAMPS];           // ref posn
-volatile int TRAJ_MeasuredPosn[TRAJ_NUM_SAMPS];      // actual posn
-static int RefPosnN = 0;                             // number of samples (<= 3000)
+volatile float ITEST_RefCurrent[ITEST_NUM_SAMPS];      // reference +/- 200mA current cycle
+volatile float ITEST_MeasuredCurrent[ITEST_NUM_SAMPS]; // actual current
+volatile float TRAJ_RefPosn[TRAJ_NUM_SAMPS];           // ref posn
+volatile float TRAJ_MeasuredPosn[TRAJ_NUM_SAMPS];      // actual posn
+static int RefPosnN = 0;                               // number of samples (<= 3000)
 
 static volatile OperationMode operating_mode = IDLE; // default IDLE (0)
 
@@ -109,12 +109,12 @@ void set_measured_current(float i_val, int idx)
     ITEST_MeasuredCurrent[idx] = i_val;
 }
 
-int get_ref_current(int idx)
+float get_ref_current(int idx)
 {
     return ITEST_RefCurrent[idx];
 }
 
-int get_measured_current(int idx)
+float get_measured_current(int idx)
 {
     return ITEST_MeasuredCurrent[idx];
 }
@@ -125,7 +125,7 @@ void set_measured_posn(int posn_deg, int idx)
     TRAJ_MeasuredPosn[idx] = posn_deg;
 }
 
-int get_ref_posn(int idx)
+float get_ref_posn(int idx)
 {
     return TRAJ_RefPosn[idx];
 }
@@ -152,6 +152,7 @@ void send_measured_v_ref_to_client(OperationMode op_mode) // type: 0 ITEST, 1 HO
     }
     case TRACK:
     {
+        // send_to_client(get_refposnN(), TRAJ_MeasuredPosn, TRAJ_RefPosn); // track control effort?
         send_to_client(get_refposnN(), TRAJ_MeasuredPosn, TRAJ_RefPosn);
         break;
     }
@@ -159,7 +160,7 @@ void send_measured_v_ref_to_client(OperationMode op_mode) // type: 0 ITEST, 1 HO
 }
 
 // sends measured and reference values of whatever type to Client
-void send_to_client(int N, volatile int *measured, volatile int *ref)
+void send_to_client(int N, volatile float *measured, volatile float *ref)
 {
     // tell client N
     sprintf(buffer, "%d\r\n", N);
@@ -168,7 +169,7 @@ void send_to_client(int N, volatile int *measured, volatile int *ref)
     for (int i = 0; i < N; ++i)
     {
         // when first number sent = 1, Python knows we’re done
-        sprintf(buffer, "%d %d %d\r\n", N - i, measured[i], ref[i]);
+        sprintf(buffer, "%f %f %f\r\n", N - i, measured[i], ref[i]);
         NU32DIP_WriteUART1(buffer);
     }
 }
@@ -193,6 +194,6 @@ void get_and_set_ref_posn()
     for (int i = 0; i < RefPosnN; ++i)
     {
         NU32DIP_ReadUART1(buffer, BUF_SIZE);
-        sscanf(buffer, "%d", &TRAJ_RefPosn[i]);
+        sscanf(buffer, "%f", &TRAJ_RefPosn[i]);
     }
 }

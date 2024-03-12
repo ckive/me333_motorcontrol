@@ -43,7 +43,7 @@ def read_plot_matrix():
     while data_received < n_int:
         dat_str = ser.read_until(b'\n')  # get the data as a string, ints seperated by spaces
         data_text = str(dat_str,'utf-8')
-        data = list(map(int,data_text.split()))
+        data = list(map(float,data_text.split()))
 
         if(len(data)==3):
             data_received += 1
@@ -83,33 +83,22 @@ def plot_traj(traj):
 
 try:
     has_quit = False
+    
+    menu_width = 35  # Set a width for the menu items
+
+    print(f"{'b: Read current sensor [mA]':<{menu_width}}{'c: Read Encoder [counts]':<{menu_width}}")
+    print(f"{'d: Read Encoder [deg]':<{menu_width}}{'e: Reset Encoder':<{menu_width}}")
+    print(f"{'f: Set PWM [-100 to 100]':<{menu_width}}{'g: Set Current Gains':<{menu_width}}")
+    print(f"{'h: Get Current gains':<{menu_width}}{'i: Set Position gains':<{menu_width}}")
+    print(f"{'j: Get Position Gains':<{menu_width}}{'k: Test Current Control':<{menu_width}}")
+    print(f"{'l: Go To Angle [deg]':<{menu_width}}{'m: Load Step Trajectory':<{menu_width}}")
+    print(f"{'n: Load Cubic Trajectory':<{menu_width}}{'o: Execute Trajectory':<{menu_width}}")
+    print(f"{'p: Unpower the motor':<{menu_width}}{'q: Quit Client':<{menu_width}}")
+    print(f"{'r: Get Mode':<{menu_width}}")
+    
     # menu loop
     while not has_quit:
         print('PIC32 MOTOR DRIVER INTERFACE')
-        # display the menu options this list will grow
-        
-        # print('\tb: Read current sensor [mA]')
-        # print('\tc: Read Encoder [counts] \td: Read Encoder [deg]')
-        # print('\te: Reset Encoder \tf: Set PWM [-100 to 100]')
-        # print('\tg: Set Current Gains \th: Get Current gains')
-        # # print('\ti: Set Position gains \tj: Get Position Gains')
-        # print('\tk: Test Current Control \tl: Go To Angle [deg]')
-        # # print('\tm: Load Step Trajectory \tn: Load Cubic Trajectory')
-        # # print('\to: Execute Trajectory \tp: Unpower the motor')
-        # print('\tq: Quit Client \tr: Get Mode')
-        
-        menu_width = 35  # Set a width for the menu items
-
-        print(f"{'b: Read current sensor [mA]':<{menu_width}}{'c: Read Encoder [counts]':<{menu_width}}")
-        print(f"{'d: Read Encoder [deg]':<{menu_width}}{'e: Reset Encoder':<{menu_width}}")
-        print(f"{'f: Set PWM [-100 to 100]':<{menu_width}}{'g: Set Current Gains':<{menu_width}}")
-        print(f"{'h: Get Current gains':<{menu_width}}{'i: Set Position gains':<{menu_width}}")
-        print(f"{'j: Get Position Gains':<{menu_width}}{'k: Test Current Control':<{menu_width}}")
-        print(f"{'l: Go To Angle [deg]':<{menu_width}}{'m: Load Step Trajectory':<{menu_width}}")
-        print(f"{'n: Load Cubic Trajectory':<{menu_width}}{'o: Execute Trajectory':<{menu_width}}")
-        print(f"{'p: Unpower the motor':<{menu_width}}{'q: Quit Client':<{menu_width}}")
-        print(f"{'r: Get Mode':<{menu_width}}")
-
         
         # read the user's choice
         selection = input('\nENTER COMMAND: ')
@@ -154,7 +143,7 @@ try:
         elif selection == "f":
             # drive PWM @ DutyCycle + direc
             pwm_str = input('Enter PWM [-100, 100]: ') # get the number to send
-            pwm_int = int(pwm_str)
+            pwm_int = float(pwm_str)
             ser.write((str(pwm_int)+'\n').encode()) # send the PWM
             print("Should see motor spinning in direc at PWM!")
         elif selection == "g":
@@ -228,9 +217,25 @@ try:
             N = int(ser.read_until(b'\n'))
             ref = [0]*N
             for i in range(N):
-                ref[i] = int(ser.read_until(b'\n'))
+                ref[i] = float(ser.read_until(b'\n'))
             plot_traj(ref)
             
+        elif selection == "y":
+            # checking what position controller gave as reference current
+            print("checking what position controller gave as reference current")
+            N = int(ser.read_until(b'\n'))
+            ref = [0]*N
+            for i in range(N):
+                ref[i] = float(ser.read_until(b'\n'))
+            plot_traj(ref)
+            
+        elif selection == "x":
+            print("Checking Ref Current ITEST")
+            N = 100
+            ref = [0]*N
+            for i in range(N):
+                ref[i] = float(ser.read_until(b'\n'))
+            plot_traj(ref)
         elif selection == "o":
             # execute trajectory
             print("Execute trajectory")

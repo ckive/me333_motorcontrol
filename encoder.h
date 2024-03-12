@@ -11,6 +11,6 @@ void WriteUART2(const char *string);
 int get_encoder_flag();
 void set_encoder_flag();
 int get_encoder_count();
-int get_encoder_deg();
+float get_encoder_deg();
 
 #endif // ENCODER__H__

@@ -24,10 +24,10 @@ int get_encoder_count()
   return pos;
 }
 
-int get_encoder_deg()
+float get_encoder_deg()
 {
 
-  return (get_encoder_count() * 360) / (4 * 96); // resolution and stuff
+  return (float)(get_encoder_count() * 360) / (4 * 96); // resolution and stuff
 }
 
 void __ISR(_UART_2_VECTOR, IPL7SOFT) U2ISR(void)

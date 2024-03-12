@@ -70,8 +70,8 @@ int main()
             }
             set_encoder_flag(0);
 
-            int deg = get_encoder_deg();
-            sprintf(buffer, "%d\r\n", deg);
+            float deg = get_encoder_deg();
+            sprintf(buffer, "%f\r\n", deg);
             NU32DIP_WriteUART1(buffer); // send encoder count to client
             break;
         }
@@ -84,9 +84,9 @@ int main()
         case 'f': // set mode to PWM and set value to user provided
         {
             set_operation_mode(PWM);
-            int power = 0;
+            float power = 0;
             NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the power range
-            sscanf(buffer, "%d", &power);
+            sscanf(buffer, "%f", &power);
             set_motor_power_and_direc(power);
             break;
         }
@@ -176,9 +176,9 @@ int main()
         }
         case 'l': // set to HOLD mode
         {
-            int desired_angle;
+            float desired_angle;
             NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
-            sscanf(buffer, "%d", &desired_angle);
+            sscanf(buffer, "%f", &desired_angle);
             set_desired_ref_angle(desired_angle); // set desired angle in position controller
             set_operation_mode(HOLD);
 
@@ -208,7 +208,30 @@ int main()
             NU32DIP_WriteUART1(buffer);
             for (int i = 0; i < N; ++i)
             {
-                sprintf(buffer, "%d\r\n", get_ref_posn(i));
+                sprintf(buffer, "%f\r\n", get_ref_posn(i));
+                NU32DIP_WriteUART1(buffer);
+            }
+            break;
+        }
+
+        case 'y': // show what Position Controller outputed as control
+        {
+            int N = 3000;
+            sprintf(buffer, "%d\r\n", N);
+            NU32DIP_WriteUART1(buffer);
+            for (int i = 0; i < N; ++i)
+            {
+                sprintf(buffer, "%f\r\n", get_PID_OUTPUT_CONTROL_U(i));
+                NU32DIP_WriteUART1(buffer);
+            }
+            break;
+        }
+
+        case 'x': // show itest ref
+        {
+            for (int i = 0; i < 100; ++i)
+            {
+                sprintf(buffer, "%f\r\n", get_ref_current(i));
                 NU32DIP_WriteUART1(buffer);
             }
             break;

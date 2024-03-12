@@ -11,13 +11,16 @@
 static volatile float Kp = 0.05, Ki = 0, Kd = 50; // control gains (1,1,1 default)
 volatile int desired_ref_angle;                   // angle user inputs in l
 
-#define POSN_EINT_MAX 50
-
-#define POSN_OUT_MAX 1000 // don't want it to go at max 1A (1000)
-
 volatile int TRAJ_ctr = 0;
 volatile float posn_PID_output_ref_current; // output of the position controller (current [mA])
 volatile int cur_deg;
+
+float PID_OUTPUT_CONTROL_U[3000];
+
+float get_PID_OUTPUT_CONTROL_U(int idx)
+{
+    return PID_OUTPUT_CONTROL_U[idx];
+}
 
 float get_posn_PID_output_ref_current()
 {
@@ -32,7 +35,7 @@ int eder_posn = 0;
 
 float u_posn = 0; // control
 
-void set_desired_ref_angle(int deg)
+void set_desired_ref_angle(float deg)
 {
     desired_ref_angle = deg;
 }
@@ -89,46 +92,29 @@ void position_PID()
 {
 
     cur_deg = get_encoder_deg(); // get cur encoder degrees
-    // PID control
-
-    error_posn = desired_ref_angle - cur_deg;
-    eder_posn = error_posn - eprev_posn;
-    eint_posn += error_posn;
-    eprev_posn = error_posn;
-
-    // // integrator anti windup
-    // if (eint_posn > POSN_EINT_MAX)
-    // {
-    //     eint_posn = POSN_EINT_MAX;
-    // }
-    // else if (eint_posn < -POSN_EINT_MAX)
-    // {
-    //     eint_posn = -POSN_EINT_MAX;
-    // }
-
-    // // cap err posn at 360 degrees HERUISTIC
-    // if (error_posn > 360)
-    // {
-    //     error_posn = 360;
-    // }
+                                 // PID control
 
     u_posn = Kp * error_posn + Ki * eint_posn + Kd * eder_posn; // a degree err value TO current to give to current controller as reference
 
-    if (u_posn > POSN_OUT_MAX)
-    {
-        u_posn = POSN_OUT_MAX;
-    }
-    else if (u_posn < -POSN_OUT_MAX)
-    {
-        u_posn = -POSN_OUT_MAX;
-    }
+    // store posn value
+    set_measured_posn(cur_deg, TRAJ_ctr);
 
-    posn_PID_output_ref_current = u_posn; // set ref current based on u control
+    posn_PID_output_ref_current = u_posn; // how to visualize this?
 
-    if (is_storing_data())
-    {
-        set_measured_posn(cur_deg, TRAJ_ctr); // store current position (deg)
-    }
+    PID_OUTPUT_CONTROL_U[TRAJ_ctr] = u_posn;
+
+    // setup next iteration of PID
+    eder_posn = error_posn - eprev_posn;
+    eint_posn += error_posn;
+    eprev_posn = error_posn;
+    ++TRAJ_ctr;
+
+    // posn_PID_output_ref_current = u_posn; // set ref current based on u control
+
+    // if (is_storing_data())
+    // {
+    //     set_measured_posn(cur_deg, TRAJ_ctr); // store current position (deg)
+    // }
 }
 
 // configure Timer4 to call ISR @ 200Hz. Runs Position Controller
@@ -139,13 +125,8 @@ void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void)
     {
     case HOLD:
     {
-        /*
-        read the encoder, compare the actual angle to the desired angle set by the user, and
-calculate a reference current using the PID control gains. It is up to you whether to
-compare the angles in terms of encoder counts or degrees or some other unit (e.g., an
-integer number of tenths or hundredths of degrees).
-*/
         position_PID(); // inf until user changes mode.
+        TRAJ_ctr = 0;
 
         // ++TRAJ_ctr;
         // if (TRAJ_ctr == get_TRAJ_NUM_SAMPS()) // just stop recording and continue to hold
@@ -167,7 +148,6 @@ integer number of tenths or hundredths of degrees).
         */
         desired_ref_angle = get_ref_posn(TRAJ_ctr); // set reference
         position_PID();
-        ++TRAJ_ctr;
 
         // stop storing data, set last deg as HOLDing angle, go to HOLD mode
         // if (TRAJ_ctr == get_TRAJ_NUM_SAMPS())
@@ -175,9 +155,9 @@ integer number of tenths or hundredths of degrees).
         {
             set_storing_data_false();
 
-            posn_PID_output_ref_current = get_ref_posn(TRAJ_ctr - 1); // set this as the holding value TODO: make setter?
-            set_operation_mode(3);
-            TRAJ_ctr = 0; // reset
+            posn_PID_output_ref_current = get_ref_posn(TRAJ_ctr - 1); // set this as the holding value
+            set_operation_mode(HOLD);
+            TRAJ_ctr = get_refposnN(); // go back one to stay at end...? @SM
         }
         break;
     }

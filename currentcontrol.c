@@ -7,40 +7,24 @@ Hardware Connection:
 
 B10 - H-Bridge Data line
 B7 - H-Bridge PWM line
-
-
-MODES
-
-PWM: drive with Duty Cycle & Direction
-IDLE: do nothing
-ITEST:
-- controller tracks a +/- 200mA 100Hz square wave reference current.
-- reference current toggles between +200 and -200 mA every 25 times through the ISR.
-- have a static int counter counting from 0 to 99
-at 25, 50, 75 reference current changes sign
-when ctr reaches 99, change to IDLE mode.
-
-- PI controller reads i_sensor, compares to square wave reference, calculates new PWM duty cycle and motor direction bit
-- reference and actual current data saved in arrays for later plotting
-
 */
 
-static volatile int MotorPWM;
+static volatile float Kp = 0.1, Ki = 0.02; // works well u direct
+// set up PI variables
 
-// static volatile float Kp = 1, Ki = 1, Kd = 1;     // control gains (1,1,1 default)
-static volatile float Kp = 0.4, Ki = 0.2, Kd = 0; // works well no load
-// set up PID variables
-int error = 0;
-int eint = 0;
-int eprev = 0;
-int eder = 0;
+volatile float error, eint = 0;
 
-float u = 0; // 0-100 float representing %
-int unew = 0;
+volatile float u = 0; // -100-100 float representing control effort (capped at 100 in magnitude)
 
 // static int EINT_MAX = 1000; // rule of thumb is Ki*EINT_MAX <= max control effort available from actuator.
 // 1 Amp on motor = 1000mA
-static int EINT_MAX = 1000;
+
+// static int EINT_MAX = 1000;
+
+float get_pi_control_effort()
+{
+    return u;
+}
 
 // returns Kp
 float get_current_kp()
@@ -115,14 +99,19 @@ void CurrentController_Startup()
 }
 
 // set motor direction and motor power duty cycle [-100, 100]
-void set_motor_power_and_direc(int power)
+void set_motor_power_and_direc(float u)
 {
-    MOTOR_DATALINE = power > 0 ? 1 : 0; // set direction
-    // MOTOR_DATALINE = power > 0 ? 0 : 1; // set direction... realized had negative current
-    MotorPWM = abs(power);
-    if (power > 100) // cap at 100% duty cycle
-        MotorPWM = 100;
-    OC1RS = MotorPWM * (PR3 + 1) / 100; // set OC1RS to new duty cycle
+    if (u < 0)
+    {
+        // deal with "negative" direction
+        MOTOR_DATALINE = 0;
+        OC1RS = (unsigned int)-u * PR3 / 100;
+    }
+    else
+    {
+        MOTOR_DATALINE = 1;
+        OC1RS = (unsigned int)u * PR3 / 100;
+    }
 }
 
 // configure Timer2 to call ISR @ 5kHz. Controls OC1
@@ -131,7 +120,7 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) CurrentController(void)
     static int ITEST_ctr = 0; // init counter once (static)
 
     static float i_val;
-    volatile static int ref = 200;
+    volatile static float ref = 200;
 
     switch (get_operation_mode())
     {
@@ -153,17 +142,10 @@ void __ISR(_TIMER_2_VECTOR, IPL5SOFT) CurrentController(void)
         ref = get_ref_current(ITEST_ctr);
         error = ref - i_val;
         eint = eint + error;
-        if (eint > EINT_MAX)
-        {
-            eint = EINT_MAX;
-        }
-        else if (eint < -EINT_MAX)
-        {
-            eint = -EINT_MAX;
-        }
+
         u = Kp * error + Ki * eint;
 
-        set_motor_power_and_direc(u / 10);
+        set_motor_power_and_direc(u);
 
         // save the data during test cycle to buffers
         if (is_storing_data())
@@ -194,10 +176,8 @@ as the reference for the PI current controller.
         i_val = INA219_read_current(); // read measured current
 
         // PID Controller
-        ref = get_posn_PID_output_ref_current(); // need to use negative of ref current TODO: internalize
-        // set_motor_power_and_direc(20);
+        ref = get_posn_PID_output_ref_current();
         current_PI(ref, i_val);
-        // set_motor_power_and_direc(20);
         break;
     }
     case TRACK:
@@ -219,20 +199,20 @@ controller attempts to match the current commanded by the position controller
 // does an iteration of PI control and sets power
 void current_PI(float ref, float i_val)
 {
-    // integrator anti windup
-    if (eint > EINT_MAX)
-    {
-        eint = EINT_MAX;
-    }
-    else if (eint < -EINT_MAX)
-    {
-        eint = -EINT_MAX;
-    }
+    // // integrator anti windup
+    // if (eint > EINT_MAX)
+    // {
+    //     eint = EINT_MAX;
+    // }
+    // else if (eint < -EINT_MAX)
+    // {
+    //     eint = -EINT_MAX;
+    // }
 
     error = ref - i_val;
     eint += error;
 
     u = Kp * error + Ki * eint;
 
-    set_motor_power_and_direc(u / 10);
+    set_motor_power_and_direc(u);
 }
