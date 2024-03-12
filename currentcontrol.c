@@ -27,8 +27,8 @@ when ctr reaches 99, change to IDLE mode.
 
 static volatile int MotorPWM;
 
-static volatile float Kp = 1, Ki = 1, Kd = 1; // control gains (1,1,1 default)
-
+// static volatile float Kp = 1, Ki = 1, Kd = 1;     // control gains (1,1,1 default)
+static volatile float Kp = 0.4, Ki = 0.2, Kd = 0; // works well no load
 // set up PID variables
 int error = 0;
 int eint = 0;
@@ -117,8 +117,8 @@ void CurrentController_Startup()
 // set motor direction and motor power duty cycle [-100, 100]
 void set_motor_power_and_direc(int power)
 {
-    // MOTOR_DATALINE = power > 0 ? 1 : 0; // set direction
-    MOTOR_DATALINE = power > 0 ? 0 : 1; // set direction... realized had negative current
+    MOTOR_DATALINE = power > 0 ? 1 : 0; // set direction
+    // MOTOR_DATALINE = power > 0 ? 0 : 1; // set direction... realized had negative current
     MotorPWM = abs(power);
     if (power > 100) // cap at 100% duty cycle
         MotorPWM = 100;
@@ -194,15 +194,11 @@ as the reference for the PI current controller.
         i_val = INA219_read_current(); // read measured current
 
         // PID Controller
-        ref = get_position_controller_current();
-        // error = ref - i_val;
-        // eder = error - eprev;
-        // eint += error;
-        // eprev = error;
-
-        // u = Kp * error + Ki * eint + Kd * eder;
-        // set_motor_power_and_direc(u / 10);
+        ref = get_posn_PID_output_ref_current(); // need to use negative of ref current TODO: internalize
+        // set_motor_power_and_direc(20);
         current_PI(ref, i_val);
+        // set_motor_power_and_direc(20);
+        break;
     }
     case TRACK:
     {
@@ -214,6 +210,7 @@ controller attempts to match the current commanded by the position controller
         i_val = INA219_read_current();
         ref = get_posn_PID_output_ref_current(); // output of position PID controller is the ref
         current_PI(ref, i_val);
+        break;
     }
     }
     IFS0bits.T2IF = 0; // clear Timer2 Interrupt flag
@@ -222,11 +219,20 @@ controller attempts to match the current commanded by the position controller
 // does an iteration of PI control and sets power
 void current_PI(float ref, float i_val)
 {
-    error = ref - i_val;
-    eder = error - eprev;
-    eint += error;
-    eprev = error;
+    // integrator anti windup
+    if (eint > EINT_MAX)
+    {
+        eint = EINT_MAX;
+    }
+    else if (eint < -EINT_MAX)
+    {
+        eint = -EINT_MAX;
+    }
 
-    u = Kp * error + Ki * eint + Kd * eder;
+    error = ref - i_val;
+    eint += error;
+
+    u = Kp * error + Ki * eint;
+
     set_motor_power_and_direc(u / 10);
 }

@@ -8,13 +8,16 @@
 
 */
 
-static volatile float Kp = 1, Ki = 1, Kd = 1; // control gains (1,1,1 default)
-float posn_ctrlr_output = 0;                  // output of the position controller (current [mA])
-int desired_ref_angle;                        // angle user inputs in l
+static volatile float Kp = 0.05, Ki = 0, Kd = 50; // control gains (1,1,1 default)
+volatile int desired_ref_angle;                   // angle user inputs in l
 
 #define POSN_EINT_MAX 50
+
+#define POSN_OUT_MAX 1000 // don't want it to go at max 1A (1000)
+
 volatile int TRAJ_ctr = 0;
-volatile float posn_PID_output_ref_current;
+volatile float posn_PID_output_ref_current; // output of the position controller (current [mA])
+volatile int cur_deg;
 
 float get_posn_PID_output_ref_current()
 {
@@ -60,16 +63,6 @@ float get_position_kd()
     return Kd;
 }
 
-float get_position_controller_current()
-{
-    return posn_ctrlr_output;
-}
-
-float set_position_controller_current(float cur)
-{
-    posn_ctrlr_output = cur;
-}
-
 // Timer4 for 200Hz ISR
 void PositionController_Startup()
 {
@@ -95,7 +88,7 @@ void PositionController_Startup()
 void position_PID()
 {
 
-    int cur_deg = get_encoder_deg(); // get cur encoder degrees
+    cur_deg = get_encoder_deg(); // get cur encoder degrees
     // PID control
 
     error_posn = desired_ref_angle - cur_deg;
@@ -113,10 +106,24 @@ void position_PID()
     //     eint_posn = -POSN_EINT_MAX;
     // }
 
-    u_posn = Kp * error_posn + Ki * eint_posn + Kd * eder_posn; // a degree err value TO current to give to current controller as reference
-    // set_motor_power_and_direc(u_posn / 10);                     // divide by 10 bc function expects PWM %age while u_posn is order of 1k (mAs)
+    // // cap err posn at 360 degrees HERUISTIC
+    // if (error_posn > 360)
+    // {
+    //     error_posn = 360;
+    // }
 
-    posn_PID_output_ref_current = u_posn;
+    u_posn = Kp * error_posn + Ki * eint_posn + Kd * eder_posn; // a degree err value TO current to give to current controller as reference
+
+    if (u_posn > POSN_OUT_MAX)
+    {
+        u_posn = POSN_OUT_MAX;
+    }
+    else if (u_posn < -POSN_OUT_MAX)
+    {
+        u_posn = -POSN_OUT_MAX;
+    }
+
+    posn_PID_output_ref_current = u_posn; // set ref current based on u control
 
     if (is_storing_data())
     {
@@ -124,7 +131,7 @@ void position_PID()
     }
 }
 
-// configure Timer2 to call ISR @ 5kHz. Controls OC1
+// configure Timer4 to call ISR @ 200Hz. Runs Position Controller
 void __ISR(_TIMER_4_VECTOR, IPL5SOFT) PositionController(void)
 {
 
@@ -139,12 +146,14 @@ compare the angles in terms of encoder counts or degrees or some other unit (e.g
 integer number of tenths or hundredths of degrees).
 */
         position_PID(); // inf until user changes mode.
-        ++TRAJ_ctr;
-        if (TRAJ_ctr == get_TRAJ_NUM_SAMPS()) // just stop recording and continue to hold
-        {
-            set_storing_data_false();
-            TRAJ_ctr = 0; // reset
-        }
+
+        // ++TRAJ_ctr;
+        // if (TRAJ_ctr == get_TRAJ_NUM_SAMPS()) // just stop recording and continue to hold
+        // {
+        //     set_storing_data_false();
+        //     TRAJ_ctr = 0; // reset
+        // }
+
         break;
     }
     case TRACK:
@@ -161,15 +170,17 @@ integer number of tenths or hundredths of degrees).
         ++TRAJ_ctr;
 
         // stop storing data, set last deg as HOLDing angle, go to HOLD mode
-        if (TRAJ_ctr == get_TRAJ_NUM_SAMPS())
+        // if (TRAJ_ctr == get_TRAJ_NUM_SAMPS())
+        if (TRAJ_ctr == get_refposnN())
         {
             set_storing_data_false();
 
-            set_position_controller_current(get_ref_posn(TRAJ_ctr - 1)); // set this as the holding value
+            posn_PID_output_ref_current = get_ref_posn(TRAJ_ctr - 1); // set this as the holding value TODO: make setter?
             set_operation_mode(3);
             TRAJ_ctr = 0; // reset
         }
         break;
     }
     }
+    IFS0bits.T4IF = 0; // clear Timer2 Interrupt flag
 }

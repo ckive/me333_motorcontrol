@@ -25,10 +25,10 @@ int main()
     __builtin_disable_interrupts();
     // in future, initialize modules or peripherals here
 
-    UART2_Startup();             // init UART2
-    INA219_Startup();            // init current sensor (it inits i2c using SDA1, SCL1)
-    CurrentController_Startup(); // init Timer2,3 OC1, DigOut for Motor
-    // PositionController_Startup(); // init Timer4
+    UART2_Startup();              // init UART2
+    INA219_Startup();             // init current sensor (it inits i2c using SDA1, SCL1)
+    CurrentController_Startup();  // init Timer2,3 OC1, DigOut for Motor
+    PositionController_Startup(); // init Timer4
 
     __builtin_enable_interrupts();
 
@@ -40,8 +40,9 @@ int main()
         {
         case 'b': // read current sensor (mA)
         {
-            // char m[50];
+            __builtin_disable_interrupts();
             float cur_current = INA219_read_current();
+            __builtin_enable_interrupts();
             sprintf(buffer, "%f\r\n", cur_current);
             NU32DIP_WriteUART1(buffer);
             break;
@@ -82,8 +83,7 @@ int main()
         }
         case 'f': // set mode to PWM and set value to user provided
         {
-            // set_operation_mode(PWM);
-            set_operation_mode(1);
+            set_operation_mode(PWM);
             int power = 0;
             NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the power range
             sscanf(buffer, "%d", &power);
@@ -115,37 +115,37 @@ int main()
 
             break;
         }
-        // case 'i': // set position gains
-        // {
-        //     float kp = 0.0;
-        //     float ki = 0.0;
-        //     float kd = 0.0;
-        //     NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
-        //     sscanf(buffer, "%f", &kp);
-        //     NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
-        //     sscanf(buffer, "%f", &ki);
-        //     NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
-        //     sscanf(buffer, "%f", &kd);
+        case 'i': // set position gains
+        {
+            float kp = 0.0;
+            float ki = 0.0;
+            float kd = 0.0;
+            NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
+            sscanf(buffer, "%f", &kp);
+            NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
+            sscanf(buffer, "%f", &ki);
+            NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
+            sscanf(buffer, "%f", &kd);
 
-        //     // __builtin_disable_interrupts(); // keep ISR disabled as briefly as possible
-        //     // set_position_kp(kp);
-        //     // set_position_ki(ki);
-        //     // set_position_kd(kd);
-        //     // clear_eint();                  // cancel out any historic integral error
-        //     // __builtin_enable_interrupts(); // only 2 simple C commands while ISRs disabled
-        //     break;
-        // }
-        // case 'j': // get position gains
-        // {
-        //     float kp = get_position_kp();
-        //     float ki = get_position_ki();
-        //     float kd = get_position_kd();
+            __builtin_disable_interrupts(); // keep ISR disabled as briefly as possible
+            set_position_kp(kp);
+            set_position_ki(ki);
+            set_position_kd(kd);
+            clear_eint();                  // cancel out any historic integral error
+            __builtin_enable_interrupts(); // only 2 simple C commands while ISRs disabled
+            break;
+        }
+        case 'j': // get position gains
+        {
+            float kp = get_position_kp();
+            float ki = get_position_ki();
+            float kd = get_position_kd();
 
-        //     sprintf(buffer, "%f;%f;%f\r\n", kp, ki, kd);
-        //     NU32DIP_WriteUART1(buffer); // send encoder count to client
+            sprintf(buffer, "%f;%f;%f\r\n", kp, ki, kd);
+            NU32DIP_WriteUART1(buffer); // send encoder count to client
 
-        //     break;
-        // }
+            break;
+        }
         case 'p': // unpower motor (switches to IDLE mode)
         {
             set_operation_mode(IDLE);
@@ -164,56 +164,64 @@ int main()
         case 'k': // test current gains (and set to ITEST mode)
         {
             // ITEST on triggers current control ISR
-            // set_operation_mode(ITEST);
-            set_operation_mode(2);
-            set_storing_data_true();
-            while (is_storing_data())
-            {
-                ;
-            }
-
-            // V1:
-            // get measured and ref arrays and plotpts
-            int ITEST_NUM_SAMPS = get_ITEST_NUM_SAMPS();
-
-            // have data to plot, send to client
-            for (int i = 0; i < ITEST_NUM_SAMPS; ++i)
-            {
-                // when first number sent = 1, Python knows we’re done
-                sprintf(buffer, "%d %d %d\r\n", ITEST_NUM_SAMPS - i, get_measured_current(i), get_ref_current(i));
-                NU32DIP_WriteUART1(buffer);
-            }
-
-            // V2:
-            // send_measured_v_ref_to_client(get_operation_mode()); // leverages known op_mode to send
+            set_operation_mode(ITEST);
+            run_store_send(ITEST);
+            // set_storing_data_true();
+            // while (is_storing_data())
+            // {
+            //     ;
+            // }
+            // send_measured_v_ref_to_client(ITEST);
             break;
         }
-        // case 'l': // set to HOLD mode
-        // {
-        //     int desired_angle;
-        //     NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
-        //     sscanf(buffer, "%d", &desired_angle);
-        //     set_desired_ref_angle(desired_angle); // set desired angle in position controller
-        //     // set_operation_mode(HOLD);
-        //     set_operation_mode(3);
-        //     while (is_storing_data()) // storing HOLD samples, BLOCK
-        //     {
-        //         ;
-        //     }
+        case 'l': // set to HOLD mode
+        {
+            int desired_angle;
+            NU32DIP_ReadUART1(buffer, BUF_SIZE); // read the current gain set
+            sscanf(buffer, "%d", &desired_angle);
+            set_desired_ref_angle(desired_angle); // set desired angle in position controller
+            set_operation_mode(HOLD);
 
-        //     // Send to client
-        //     send_measured_v_ref_to_client(get_operation_mode());
-        //     break;
-        // }
-        // case 'o': // set to TRACK mode
-        // {
-        //     /*
+            // while (is_storing_data()) // storing HOLD samples, BLOCK
+            // {
+            //     ;
+            // }
 
-        //     */
-        //     set_operation_mode(TRACK);
-        //     run_store_send(TRACK);
-        //     break;
-        // }
+            // // Send to client
+            // send_measured_v_ref_to_client(HOLD);
+            break;
+        }
+        case 'm': // load step trajectory
+        {
+            get_and_set_ref_posn();
+            break;
+        }
+        case 'n': // load cubic trajectory
+        {
+            get_and_set_ref_posn();
+            break;
+        }
+        case 'z': // show what's stored in TRAJ_RefPosn
+        {
+            int N = get_refposnN();
+            sprintf(buffer, "%d\r\n", N);
+            NU32DIP_WriteUART1(buffer);
+            for (int i = 0; i < N; ++i)
+            {
+                sprintf(buffer, "%d\r\n", get_ref_posn(i));
+                NU32DIP_WriteUART1(buffer);
+            }
+            break;
+        }
+        case 'o': // set to TRACK mode
+        {
+            /*
+
+            */
+            set_operation_mode(TRACK);
+            run_store_send(TRACK);
+            break;
+        }
         case 'q':
         {
             // handle q for quit. Later you may want to return to IDLE mode here.

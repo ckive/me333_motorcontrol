@@ -18,6 +18,4 @@ void set_position_kd(float kd);
 float get_position_kp();
 float get_position_ki();
 float get_position_kd();
-float get_position_controller_current();
-float set_position_controller_current(float cur);
 float get_posn_PID_output_ref_current();

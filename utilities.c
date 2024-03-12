@@ -21,12 +21,25 @@ volatile int ITEST_RefCurrent[ITEST_NUM_SAMPS];      // reference +/- 200mA curr
 volatile int ITEST_MeasuredCurrent[ITEST_NUM_SAMPS]; // actual current
 volatile int TRAJ_RefPosn[TRAJ_NUM_SAMPS];           // ref posn
 volatile int TRAJ_MeasuredPosn[TRAJ_NUM_SAMPS];      // actual posn
+static int RefPosnN = 0;                             // number of samples (<= 3000)
 
 static volatile OperationMode operating_mode = IDLE; // default IDLE (0)
 
 static volatile int StoringData = 0; // if this flag = 1, currently storing
 
 char buffer[200]; // everyone uses this (extern)
+
+#define BUF_SIZE 200
+
+void set_refposnN(int N)
+{
+    RefPosnN = N;
+}
+
+int get_refposnN()
+{
+    return RefPosnN;
+}
 
 void set_operation_mode(OperationMode mode)
 {
@@ -117,21 +130,30 @@ int get_ref_posn(int idx)
     return TRAJ_RefPosn[idx];
 }
 
+void set_ref_posn(int idx, int val)
+{
+    TRAJ_RefPosn[idx] = val;
+}
+
 void send_measured_v_ref_to_client(OperationMode op_mode) // type: 0 ITEST, 1 HOLD, 2 TRACK
 {
     switch (op_mode)
     {
     case ITEST:
     {
+        // ITEST_NUM_SAMPS = 100
         send_to_client(ITEST_NUM_SAMPS, ITEST_MeasuredCurrent, ITEST_RefCurrent);
+        break;
     }
     case HOLD:
     {
-        send_to_client(TRAJ_NUM_SAMPS, TRAJ_MeasuredPosn, TRAJ_RefPosn);
+        send_to_client(get_refposnN(), TRAJ_MeasuredPosn, TRAJ_RefPosn);
+        break;
     }
     case TRACK:
     {
-        send_to_client(TRAJ_NUM_SAMPS, TRAJ_MeasuredPosn, TRAJ_RefPosn);
+        send_to_client(get_refposnN(), TRAJ_MeasuredPosn, TRAJ_RefPosn);
+        break;
     }
     }
 }
@@ -139,6 +161,10 @@ void send_measured_v_ref_to_client(OperationMode op_mode) // type: 0 ITEST, 1 HO
 // sends measured and reference values of whatever type to Client
 void send_to_client(int N, volatile int *measured, volatile int *ref)
 {
+    // tell client N
+    sprintf(buffer, "%d\r\n", N);
+    NU32DIP_WriteUART1(buffer);
+    // send rest of results
     for (int i = 0; i < N; ++i)
     {
         // when first number sent = 1, Python knows we’re done
@@ -156,4 +182,17 @@ void run_store_send(OperationMode mode)
         ;
     }
     send_measured_v_ref_to_client(mode);
+}
+
+// for loading and storing trajectory
+void get_and_set_ref_posn()
+{
+    NU32DIP_ReadUART1(buffer, BUF_SIZE); // read number of data points
+    sscanf(buffer, "%d", &RefPosnN);
+
+    for (int i = 0; i < RefPosnN; ++i)
+    {
+        NU32DIP_ReadUART1(buffer, BUF_SIZE);
+        sscanf(buffer, "%d", &TRAJ_RefPosn[i]);
+    }
 }

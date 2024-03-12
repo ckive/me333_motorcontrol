@@ -88,7 +88,7 @@ endif
 
 #what to do when make all
 .PHONY : all
-all : $(TARGET).hex $(TARGET).dis
+all : $(TARGET).hex #$(TARGET).dis
 # Turn the elf file into a hex file.
 $(TARGET).hex : $(TARGET).elf
 	@echo Creating hex file
@@ -115,7 +115,7 @@ clean :
 
 .PHONY: write
 # After making, call the NU32utility to program via bootloader.
-write : $(TARGET).hex $(TARGET).dis
+write : $(TARGET).hex #$(TARGET).dis
 	$(WRITE) "$(PORT)" $(TARGET).hex 
 
 .PHONY: putty

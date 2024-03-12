@@ -33,30 +33,53 @@ mode_map = {
 
 
  
-# def read_plot_matrix():
-#     n_str = ser.read_until(b'\n');  # get the number of data points to receive
-#     n_int = int(n_str) # turn it into an int
-#     print('Data lengeth = ' + str(n_int))
-#     ref = []
-#     data = []
-#     data_received = 0
-#     while data_received < n_int:
-#         dat_str = ser.read_until(b'\n');  # get the data as a string, ints seperated by spaces
-#         dat_int = list(map(int,dat_str.split())) # now the data is a list
-#         ref.append(dat_int[0])
-#         data.append(dat_int[1])
-#         data_received = data_received + 1
-#     meanzip = zip(ref,data)
-#     meanlist = []
-#     for i,j in meanzip:
-#         meanlist.append(abs(i-j))
-#     score = mean(meanlist)
-#     t = range(len(ref)) # index array
-#     plt.plot(t,ref,'r*-',t,data,'b*-')
-#     plt.title('Score = ' + str(score))
-#     plt.ylabel('value')
-#     plt.xlabel('index')
-#     plt.show()
+def read_plot_matrix():
+    # n_int is data length (100 for K), variable for others
+    n_int = int(ser.read_until(b'\n')) # get N
+    print('Data length = ', n_int)
+    ref = []
+    measured = []
+    data_received = 0
+    while data_received < n_int:
+        dat_str = ser.read_until(b'\n')  # get the data as a string, ints seperated by spaces
+        data_text = str(dat_str,'utf-8')
+        data = list(map(int,data_text.split()))
+
+        if(len(data)==3):
+            data_received += 1
+            measured.append(data[1])
+            ref.append(data[2])
+            
+            
+    meanzip = zip(ref, measured)
+    meanlist = []
+    for i,j in meanzip:
+        meanlist.append(abs(i-j))
+        
+    """
+    
+    From the image you provided, we know that the signal is a 100 Hz square wave and we're sampling at 5000 samples per second, so each sample represents  0.2 milliseconds of real time (since 1/5000 seconds per sample is 0.2 milliseconds).
+    """
+
+    time_per_sample_ms = 0.2  # 0.2 ms per sample at 5000 samples per second
+    t = [i * time_per_sample_ms for i in range(len(ref))]
+
+    score = sum(meanlist)/n_int
+    plt.title('Score = ' + str(score))
+    # t = range(len(measured)) # time array
+    plt.plot(t, measured,'r*-', label="Measured Current [mA]") 
+    plt.plot(t, ref,'b*-',label="Reference Current [mA]")
+    plt.ylabel('Current [mA]')
+    plt.xlabel('Time [ms]')
+    plt.legend()
+    plt.show()
+
+def plot_traj(traj):
+    t = range(len(ref))
+    plt.plot(t,ref,'r*-')
+    plt.ylabel('ange in degrees')
+    plt.xlabel('index')
+    plt.show()
 
 try:
     has_quit = False
@@ -164,67 +187,54 @@ try:
             
         elif selection == "k":
             # run ITEST and plot
-            # read_plot_matrix()
-            # TODO: make reading this a function
             print("Running ITEST!")
-            # read the data back as int in reverse order
-            read_samples = 100
-            measured = []
-            ref = []
-            while read_samples > 1:
-                data_read = ser.read_until(b'\n',50)
-                print(data_read)
-                data_text = str(data_read,'utf-8')
-                data = list(map(int,data_text.split()))
-
-                if(len(data)==3):
-                    read_samples = data[0]
-                    measured.append(data[1])
-                    ref.append(data[2])
-
-            # plot it
-            t = range(len(measured)) # time array
-            plt.plot(t, measured,'r*-', label="Measured Current [mA]")    # this is in range 1024. Need to map it to PR scale.
-            plt.plot(t, ref,'b*-',label="Reference Current [mA]")
-            plt.ylabel('value')
-            plt.xlabel('sample')
-            plt.legend()
-            plt.show()
+            read_plot_matrix()
+            
         elif selection == "l":
             # go to angle (deg)
             print("HOLDing!")
-            pass
+            # set position gains (kp, ki)
+            angle = input('Enter desired angle to hold: ')
+            ser.write((angle+'\n').encode()) # send the kp
+            
         elif selection == "m":
             # load step trajectory
             ref = genRef('step')
-            #print(len(ref))
-            t = range(len(ref))
-            plt.plot(t,ref,'r*-')
-            plt.ylabel('ange in degrees')
-            plt.xlabel('index')
-            plt.show()
+            if len(ref) > 3000:
+                print('too many, ref posn only 3000 size')
+            else:
+                plot_traj(ref)
             
             # send: number of data points, each data point
             ser.write((str(len(ref))+'\n').encode())
             for i in ref:
                 ser.write((str(i)+'\n').encode())
+
         elif selection == "n":
             # load cubic trajectory
             ref = genRef('cubic')
-            t = range(len(ref))
-            plt.plot(t,ref,'r*-')
-            plt.ylabel('ange in degrees')
-            plt.xlabel('index')
-            plt.show()
+            if len(ref) > 3000:
+                print('too many, ref posn only 3000 size')
+            else:
+                plot_traj(ref)
             
             # send: number of data points, each data point
             ser.write((str(len(ref))+'\n').encode())
             for i in ref:
                 ser.write((str(i)+'\n').encode())
+        elif selection == "z":
+            # checking what's stored in ref posn
+            print("Showing what traj is stored on PIC")
+            N = int(ser.read_until(b'\n'))
+            ref = [0]*N
+            for i in range(N):
+                ref[i] = int(ser.read_until(b'\n'))
+            plot_traj(ref)
+            
         elif selection == "o":
             # execute trajectory
             print("Execute trajectory")
-            pass
+            read_plot_matrix()
         elif selection == "p":
             # unpower motor (go to IDLE)
             print("Motor Unpowered to IDLE")
@@ -237,7 +247,6 @@ try:
             mode_str = ser.read_until(b'\n')
             mode = int(mode_str)
             print("Mode: ", mode_map[mode])
-            pass
         
         else:
             print('Invalid Selection ' + selection_endline)
@@ -247,3 +256,4 @@ except Exception as e:
 finally:
     ser.close()
     print("\nClosing gracefully")
+    

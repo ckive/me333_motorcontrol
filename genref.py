@@ -11,8 +11,8 @@ def genRef(method):
 
     reflist = [0,0,1,90,2,45,3,45] # defualt refs
     
-    refs_str = input('Enter times and angles, starting at t=0 (ex: 0 0 1 90 2 90 3 0): ')
-    reflist = list(map(float,refs_str.split()))
+    # refs_str = input('Enter times and angles, starting at t=0 (ex: 0 0 1 90 2 90 3 0): ')
+    # reflist = list(map(float,refs_str.split()))
 
     # check to see if the reflist is even and the odd values (times) are increasing
     if (len(reflist)%2!=0 or len(reflist) < 2 or reflist[0]!=0):
@@ -76,5 +76,5 @@ def genRef(method):
                 tseg = (refCtr)*dt -time_list[i]
                 ref.append(a0 + a1*tseg + a2*tseg*tseg + a3*tseg*tseg*tseg)
                 refCtr = refCtr + 1
-
+    print('length of ref arr:', len(ref))
     return ref

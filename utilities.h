@@ -32,5 +32,10 @@ void run_store_send(OperationMode mode);
 void set_measured_posn(int posn_deg, int idx);
 int get_ref_posn(int idx);
 int get_TRAJ_NUM_SAMPS();
+void set_ref_posn(int idx, int val);
+
+int get_refposnN();
+void set_refposnN(int N);
+void get_and_set_ref_posn();
 
 #endif
